@@ -15,6 +15,9 @@ title('Supply and demand');
 xlabel('Time [day]');
 ylabel('Power [W]');
 legend("Supply","Demand");
+%% daily energy demand average
+%avgSupply = mean(PSupply);
+avgDemand = mean(PDemand);
 
 %% Stored energy
 subplot(2,2,2);
@@ -45,7 +48,42 @@ title('Load balancing');
 xlabel('Time [day]');
 ylabel('Power [W]');
 legend("Sell","Buy");
+%% Supply - Demand difference
+PDiff = PSupply - PDemand;
+tday = tout/unit("day");
+PDiffW = PDiff/unit("W");
+dt = tout(2) - tout(1);        % [s]
 
+ESurplus = sum(max(PDiff,0))*dt;     % [J]
+EDeficit = sum(max(-PDiff,0))*dt;    % [J]
+
+PeakSurplus = max(PDiff);            % [W]
+PeakDeficit = min(PDiff);            % [W]
+
+ESurplus_MWh = ESurplus / 3.6e9;
+EDeficit_MWh = EDeficit / 3.6e9;
+figure;
+area(tday, PDiffW);
+hold on;
+yline(0, 'k--');
+xlim([0 tday(end)]);
+grid on;
+title('Supply - Demand difference');
+xlabel('Time [day]');
+ylabel('Power difference [W]');
+txt = sprintf([ ...
+    'Peak surplus: %.2e W\n' ...
+    'Peak deficit: %.2e W\n' ...
+    'Annual surplus: %.2f MWh\n' ...
+    'Annual deficit: %.2f MWh'], ...
+    PeakSurplus, PeakDeficit, ESurplus_MWh, EDeficit_MWh);
+
+text(0.02*tday(end), 0.9*max(PDiffW), txt, ...
+    'FontSize', 10, ...
+    'BackgroundColor', 'white', ...
+    'EdgeColor', 'black', ...
+    'Margin', 6, ...
+    'VerticalAlignment', 'top');
 %% Pie charts
 
 % integrate the power signals in time
