@@ -5,13 +5,13 @@
 
 timeUnit   = 's';
 
-supplyFile = "Team07_supply.csv";
+supplyFile = 'data/Team07_supply.csv';
 supplyUnit = "MW";
 
 % load the supply data
 Supply = loadSupplyData(supplyFile, timeUnit, supplyUnit);
 
-demandFile = "Team07_demand.csv";
+demandFile = 'data/Team07_demand.csv';
 demandUnit = "MW";
 
 % load the demand data
