@@ -49,7 +49,7 @@ Preq_W      = demandPower + lineLoss_W;        % [W] power required at supply no
 eta_charge    = 0.95;        % [-] electricity -> stored heat
 eta_discharge = eta_turbine; % [-] stored heat -> electricity (turbine)
 k_loss        = 1e-7;        % [1/s] standby thermal loss coefficient
-Emax          = 1718.75e9;   % [J] usable PCM energy capacity (size of the store)
+Emax          = 1718.75e9;   % [J] usable energy capacity (size of the store)
 
 % --- WITH thermal storage ---
 S = dispatch(supplyPower, Preq_W, dt, Emax, eta_charge, eta_discharge, k_loss);
