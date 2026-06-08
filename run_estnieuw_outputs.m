@@ -17,17 +17,16 @@ dt    = 900;                 % sample interval (15 min)
 time  = (0:N-1)' * dt;
 t_day = time / 86400;
 
-supplyPower = supply_MW * 1e6;     % [W]
-demandPower = demand_MW * 1e6;     % [W]
-
+supplyPower = supply_MW * 1e6;     % W
+demandPower = demand_MW * 1e6;     % W
 supply_ts = timeseries(supplyPower, time);
 demand_ts = timeseries(demandPower, time);
 
-V_line       = 220e3;     % [V]  transmission voltage
-R_line       = 30;        % [ohm] 0.3 ohm/km * 100 km
-eta_turbine  = 0.4;       % [-]  heat -> electricity (discharge efficiency)
-T_min        = 300;       % [K]  minimum allowed PCM temperature
-
+V_line       = 220e3;     %   transmission voltage
+R_line       = 30;        % 0.3 ohm/km * 100 km
+eta_turbine  = 0.4;       %  (discharge efficiency)
+T_min        = 500;       %  minimum allowed hitec temperature
+T_max = 800 % maximum allowed hitec temperature
 set_param([model '/voltage'], 'Value', 'V_line');
 set_param([model '/multiply I^2 with total resistance'], 'Gain', 'R_line');
 set_param([model '/turbine efficiency (required heat)'], 'Gain', '1/eta_turbine');
@@ -39,27 +38,22 @@ set_param(model, 'StopTime', num2str(stop_time));
 out = sim(model);
 
 
-I_A         = demandPower ./ V_line;          % [A]
-lineLoss_W  = I_A.^2 .* R_line;               % [W] I^2 R loss
-Preq_W      = demandPower + lineLoss_W;        % [W] power required at supply node
+I_A         = demandPower ./ V_line;          % 
+lineLoss_W  = I_A.^2 .* R_line;               %  I^2 R loss
+Preq_W      = demandPower + lineLoss_W;        %  power required at supply node
 
-%% ------------------------------------------------------------------ %%
-%  Storage + grid buy/sell parameters
-%% ------------------------------------------------------------------ %%
-eta_charge    = 0.95;        % [-] electricity -> stored heat
-eta_discharge = eta_turbine; % [-] stored heat -> electricity (turbine)
-k_loss        = 1e-7;        % [1/s] standby thermal loss coefficient
-Emax          = 1718.75e9;   % [J] usable energy capacity (size of the store)
+%% grid parameters
+eta_charge    = 0.95;       
+eta_discharge = eta_turbine;
+k_loss        = 1e-7;        %  standby thermal loss coefficient
+Emax          = 1718.75e9;   %  usable energy capacity 
 
-% --- WITH thermal storage ---
+% WITH thermal storage
 S = dispatch(supplyPower, Preq_W, dt, Emax, eta_charge, eta_discharge, k_loss);
 
-% --- WITHOUT thermal storage (baseline: every deficit bought, every surplus sold) ---
+%  WITHOUT thermal storage  ---
 B = dispatch(supplyPower, Preq_W, dt, 0, eta_charge, eta_discharge, k_loss);
 
-%% ------------------------------------------------------------------ %%
-%  Energy totals (J)
-%% ------------------------------------------------------------------ %%
 Ein_supply = trapz(time, supplyPower);    % received from solar park
 Edemand    = trapz(time, demandPower);    % electricity consumed by households
 Elineloss  = trapz(time, lineLoss_W);
@@ -80,7 +74,7 @@ E_sell0    = trapz(time, B.Psell);
 E_received  = E_direct + E_toStore + E_sell;     % = available solar
 E_delivered = E_direct + E_fromStore + E_buy;    % = required (demand + loss)
 
-fprintf('\n=============== Energy summary (with storage) ===============\n');
+fprintf('\n Energy summary\n');
 fprintf('Solar supply received : %10.3e J  (%8.1f MWh)\n', Ein_supply, Ein_supply/3.6e9);
 fprintf('Household demand       : %10.3e J  (%8.1f MWh)\n', Edemand,    Edemand/3.6e9);
 fprintf('Transmission loss      : %10.3e J  (%8.1f MWh)\n', Elineloss,  Elineloss/3.6e9);
@@ -91,7 +85,7 @@ fprintf('Energy SOLD to grid    : %10.3e J  (%8.1f MWh)\n', E_sell,     E_sell/3
 fprintf('Energy BOUGHT from grid: %10.3e J  (%8.1f MWh)\n', E_buy,      E_buy/3.6e9);
 fprintf('Storage standby loss   : %10.3e J  (%8.1f MWh)\n', E_storeLoss,E_storeLoss/3.6e9);
 
-fprintf('\n--------------- Comparison: storage vs no storage ----------\n');
+fprintf('\n comparison\n');
 fprintf('Bought  no-storage : %8.1f MWh   with-storage : %8.1f MWh   (-%4.1f%%)\n', ...
     E_buy0/3.6e9, E_buy/3.6e9, 100*(E_buy0-E_buy)/max(E_buy0,eps));
 fprintf('Sold    no-storage : %8.1f MWh   with-storage : %8.1f MWh   (-%4.1f%%)\n', ...
@@ -130,9 +124,6 @@ legend('Sell','Buy');
 
 exportgraphics(fig1, 'runoutput1.png', 'Resolution', 200);
 
-%% ================================================================== %%
-%  FIGURE 2  ->  runoutput2.png   (pie charts + storage benefit)
-%% ================================================================== %%
 fig2 = figure('Color','w','Position',[100 100 1100 650]);
 tl = tiledlayout(fig2,1,2);
 
@@ -159,15 +150,9 @@ title(tl, sprintf(['Bought %.0f \\rightarrow %.0f MWh (-%.0f%%)     ' ...
 
 exportgraphics(fig2, 'runoutput2.png', 'Resolution', 200);
 
-disp('DONE: characteristic graph (runoutput1.png) and pie charts (runoutput2.png) written.');
 
-%% ================================================================== %%
-%  Local function: time-stepped dispatch with grid buy/sell
-%% ================================================================== %%
 function S = dispatch(supply, Preq, dt, Emax, eta_c, eta_d, k_loss)
-% Marches a bounded thermal store and splits the flows into the EST
-% categories (direct / to-storage / from-storage / sold / bought).
-% Set Emax = 0 to get the no-storage baseline.
+
     n = numel(supply);
     [E, Pdirect, Pto_storage, Pfrom_storage, Psell, Pbuy, Ploss] = deal(zeros(n,1));
     Estate = 0;                                   % current stored energy [J]
